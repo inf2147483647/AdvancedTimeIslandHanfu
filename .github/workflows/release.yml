@@ -18,10 +18,16 @@ jobs:
           fetch-depth: 0
 
       - name: Package repository
+        env:
+          # 文件名含中文，显式使用 UTF-8 locale，保证 zip 内文件名编码稳定
+          LANG: C.UTF-8
+          LC_ALL: C.UTF-8
         run: |
           set -euo pipefail
           ZIP="$RUNNER_TEMP/AdvancedTimeIslandHanfu.zip"
-          find . -type f -not -path '*/.*' -print0 | xargs -0 zip -q "$ZIP"
+          # -UN=UTF8：非 ASCII 文件名按 UTF-8 存储并置位 Unicode 标记，
+          # 避免解压端（Windows/.NET）按本地代码页解码导致中文文件名乱码
+          find . -type f -not -path '*/.*' -print0 | xargs -0 zip -q -UN=UTF8 "$ZIP"
           echo "Packaged files:"
           unzip -l "$ZIP"
           echo "zip_path=$ZIP" >> "$GITHUB_ENV"
