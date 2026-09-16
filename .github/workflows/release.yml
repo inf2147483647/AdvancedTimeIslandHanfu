@@ -1,0 +1,50 @@
+name: Release Zip
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Package repository
+        run: |
+          set -euo pipefail
+          ZIP="$RUNNER_TEMP/AdvancedTimeIslandHanfu.zip"
+          find . -type f -not -path '*/.*' -print0 | xargs -0 zip -q "$ZIP"
+          echo "Packaged files:"
+          unzip -l "$ZIP"
+          echo "zip_path=$ZIP" >> "$GITHUB_ENV"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BODY: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          PREFIX=$(TZ=Asia/Shanghai date +"%Y.%-m%d")
+          git fetch --tags --force
+          SEQ=$( { git tag -l "${PREFIX}.*" | sed "s/^${PREFIX}\.//" | grep -E '^[0-9]+$' || true; } | sort -n | tail -n1)
+          SEQ=${SEQ:-0}
+          for i in 0 1 2 3 4 5 6 7 8 9; do
+            TAG="${PREFIX}.$((SEQ + i))"
+            if gh release view "$TAG" --json tagName >/dev/null 2>&1; then
+              continue
+            fi
+            if gh release create "$TAG" "$zip_path" --title "$TAG" --notes "$BODY" --target "$GITHUB_SHA"; then
+              echo "Published release $TAG"
+              exit 0
+            fi
+          done
+          echo "Failed to allocate a release tag for prefix $PREFIX" >&2
+          exit 1
